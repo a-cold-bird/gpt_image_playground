@@ -16,6 +16,7 @@ export interface CallApiOptions {
   /** 输入图片的 data URL 列表 */
   inputImageDataUrls: string[]
   maskDataUrl?: string
+  extraHeaders?: Record<string, string>
   onFalRequestEnqueued?: (request: { requestId: string; endpoint: string }) => void
 }
 

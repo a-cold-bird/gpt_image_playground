@@ -1,5 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: HTMLElement, options: Record<string, any>) => string
+      reset: (id: string) => void
+    }
+  }
+}
 import type {
   AppSettings,
   TaskParams,
@@ -74,6 +83,14 @@ interface AppState {
   setSettings: (s: Partial<AppSettings>) => void
   dismissedCodexCliPrompts: string[]
   dismissCodexCliPrompt: (key: string) => void
+
+  // 额度
+  fingerprint: string
+  quota: { allowed: boolean; userRemaining: number; globalRemaining: number; userLimit: number; globalLimit: number; hasEmail: boolean; email: string | null; affCode: string; banned: boolean } | null
+  pendingAff: string
+  setFingerprint: (fp: string) => void
+  setQuota: (q: AppState['quota']) => void
+  setPendingAff: (aff: string) => void
 
   // 输入
   prompt: string
@@ -182,6 +199,14 @@ export const useStore = create<AppState>()(
           ? st.dismissedCodexCliPrompts
           : [...st.dismissedCodexCliPrompts, key],
       })),
+
+      // Quota
+      fingerprint: '',
+      quota: null,
+      pendingAff: '',
+      setFingerprint: (fingerprint) => set({ fingerprint }),
+      setQuota: (quota) => set({ quota }),
+      setPendingAff: (pendingAff) => set({ pendingAff }),
 
       // Input
       prompt: '',
@@ -555,13 +580,29 @@ export async function initStore() {
 
 /** 提交新任务 */
 export async function submitTask(options: { allowFullMask?: boolean } = {}) {
-  const { settings, prompt, inputImages, maskDraft, params, showToast, setConfirmDialog } =
+  const { settings, prompt, inputImages, maskDraft, params, showToast, setConfirmDialog, fingerprint, quota } =
     useStore.getState()
 
   const activeProfile = getActiveApiProfile(settings)
-  if (validateApiProfile(activeProfile)) {
+  const isFreeMode = activeProfile.provider === 'openai' && !activeProfile.apiKey
+  if (!isFreeMode && validateApiProfile(activeProfile)) {
     showToast(`请先完善当前 Provider：${validateApiProfile(activeProfile)}`, 'error')
     useStore.getState().setShowSettings(true)
+    return
+  }
+  if (isFreeMode && !fingerprint) {
+    showToast('用户标识未初始化，请刷新页面', 'error')
+    return
+  }
+  if (isFreeMode && quota && !quota.allowed) {
+    setConfirmDialog({
+      title: '免费额度已用完',
+      message: quota.userRemaining <= 0
+        ? '今日免费画图次数已用完。\n\n前往 moyuu.cc 注册即送 100 张画图额度，选择 codex 分组，仅 ¥0.05/张。\n\n或在右上角设置中绑定邮箱获取更多免费次数。'
+        : '全站今日免费额度已用完，请明天再试。\n\n或前往 moyuu.cc 注册获取自己的 API Key，不受站内限额影响。',
+      confirmText: '前往注册',
+      action: () => { window.open('https://moyuu.cc', '_blank') },
+    })
     return
   }
 
@@ -646,8 +687,9 @@ export async function submitTask(options: { allowFullMask?: boolean } = {}) {
 }
 
 async function executeTask(taskId: string) {
-  const { settings } = useStore.getState()
-  const task = useStore.getState().tasks.find((t) => t.id === taskId)
+  const state = useStore.getState()
+  const { settings, fingerprint, quota } = state
+  const task = state.tasks.find((t) => t.id === taskId)
   if (!task) return
   const activeProfile = getActiveApiProfile(settings)
   const taskProvider = task.apiProvider ?? activeProfile.provider
@@ -657,6 +699,35 @@ async function executeTask(taskId: string) {
 
   if (taskProvider === 'openai') {
     scheduleOpenAIWatchdog(taskId, activeProfile.timeout)
+  }
+
+  const isFreeMode = taskProvider === 'openai' && !activeProfile.apiKey
+  let effectiveSettings = settings
+  if (isFreeMode) {
+    if (!fingerprint) throw new Error('用户标识未初始化')
+    effectiveSettings = { ...settings, baseUrl: '/api/free/v1', apiKey: 'free' }
+  }
+
+  // Get Turnstile token for free mode if needed
+  let turnstileToken = ''
+  if (isFreeMode) {
+    try {
+      const resp = await fetch('/api/quota/captcha-config')
+      const cfg = await resp.json()
+      if (cfg.data?.enabled && cfg.data?.siteKey && window.turnstile) {
+        turnstileToken = await new Promise<string>((resolve) => {
+          const container = document.createElement('div')
+          container.style.display = 'none'
+          document.body.appendChild(container)
+          window.turnstile!.render(container, {
+            sitekey: cfg.data.siteKey,
+            callback: (token: string) => { container.remove(); resolve(token) },
+            'error-callback': () => { container.remove(); resolve('') },
+            size: 'invisible' as any,
+          })
+        })
+      }
+    } catch {}
   }
 
   try {
@@ -674,7 +745,7 @@ async function executeTask(taskId: string) {
     }
 
     const result = await callImageApi({
-      settings,
+      settings: effectiveSettings,
       prompt: task.prompt,
       params: task.params,
       inputImageDataUrls: inputDataUrls,
@@ -687,6 +758,7 @@ async function executeTask(taskId: string) {
           falRecoverable: false,
         })
       },
+      ...(isFreeMode ? { extraHeaders: { 'X-Fingerprint': fingerprint, ...(turnstileToken ? { 'X-Turnstile': turnstileToken } : {}) } } : {}),
     })
 
     const latestBeforeSuccess = useStore.getState().tasks.find((t) => t.id === taskId)
@@ -738,6 +810,16 @@ async function executeTask(taskId: string) {
     })
 
     useStore.getState().showToast(`生成完成，共 ${outputIds.length} 张图片`, 'success')
+
+    if (isFreeMode && fingerprint) {
+      try {
+        const { checkQuota: checkQ } = await import('./lib/quota')
+        const q = await checkQ(fingerprint)
+        const prev = useStore.getState().quota
+        useStore.getState().setQuota({ ...(prev || { hasEmail: false, email: null, affCode: '', banned: false }), ...q })
+      } catch {}
+    }
+
     const currentMask = useStore.getState().maskDraft
     if (
       maskDataUrl &&

@@ -60,15 +60,26 @@ export function buildApiUrl(
   proxyConfig?: DevProxyConfig | null,
   useApiProxy = false,
 ): string {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
   const endpointPath = path.replace(/^\/+/, '')
+
+  if (useApiProxy) {
+    const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
+    const apiPath = normalizedBaseUrl.endsWith('/v1') ? endpointPath : ['v1', endpointPath].join('/')
+    return `${proxyConfig?.prefix ?? DEFAULT_PROXY_PREFIX}/${apiPath}`
+  }
+
+  // Relative URLs (e.g. /api/free) — use as-is without normalizeBaseUrl
+  if (baseUrl.startsWith('/')) {
+    const base = baseUrl.replace(/\/+$/, '')
+    const hasV1 = base.endsWith('/v1')
+    const apiPath = hasV1 ? endpointPath : ['v1', endpointPath].join('/')
+    return `${base}/${apiPath}`
+  }
+
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
   const apiPath = normalizedBaseUrl.endsWith('/v1')
     ? endpointPath
     : ['v1', endpointPath].join('/')
-
-  if (useApiProxy) {
-    return `${proxyConfig?.prefix ?? DEFAULT_PROXY_PREFIX}/${apiPath}`
-  }
 
   return normalizedBaseUrl ? `${normalizedBaseUrl}/${apiPath}` : `/${apiPath}`
 }

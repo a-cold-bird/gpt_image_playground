@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
-import { initStore } from './store'
-import { useStore } from './store'
+import { initStore, useStore } from './store'
 import { normalizeBaseUrl } from './lib/api'
 import { normalizeSettings, switchApiProfileProvider } from './lib/apiProfiles'
 import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
 import type { ApiMode, ApiProvider, AppSettings } from './types'
+import { getFingerprint } from './lib/fingerprint'
+import { initQuota } from './lib/quota'
 import Header from './components/Header'
 import SearchBar from './components/SearchBar'
 import TaskGrid from './components/TaskGrid'
@@ -19,7 +20,31 @@ import ImageContextMenu from './components/ImageContextMenu'
 
 export default function App() {
   const setSettings = useStore((s) => s.setSettings)
+  const setFingerprint = useStore((s) => s.setFingerprint)
+  const setQuota = useStore((s) => s.setQuota)
+  const setShowSettings = useStore((s) => s.setShowSettings)
+  const setPendingAff = useStore((s) => s.setPendingAff)
   useDockerApiUrlMigrationNotice()
+
+  useEffect(() => {
+    getFingerprint().then(async (fp) => {
+      setFingerprint(fp)
+      try {
+        const info = await initQuota(fp)
+        setQuota({
+          allowed: info.allowed,
+          userRemaining: info.userRemaining,
+          globalRemaining: info.globalRemaining,
+          userLimit: info.userLimit,
+          globalLimit: info.globalLimit,
+          hasEmail: info.hasEmail,
+          email: info.email,
+          affCode: info.affCode,
+          banned: info.banned,
+        })
+      } catch {}
+    })
+  }, [setFingerprint, setQuota])
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
@@ -73,14 +98,28 @@ export default function App() {
       }
     }
 
+    const affParam = searchParams.get('aff')
+    if (affParam) {
+      setPendingAff(affParam.trim())
+      setShowSettings(true)
+    }
+
     setSettings(nextSettings)
 
-    if (searchParams.has('apiUrl') || searchParams.has('apiKey') || searchParams.has('codexCli') || searchParams.has('apiMode') || searchParams.has('provider')) {
+    if (
+      searchParams.has('apiUrl') ||
+      searchParams.has('apiKey') ||
+      searchParams.has('codexCli') ||
+      searchParams.has('apiMode') ||
+      searchParams.has('provider') ||
+      searchParams.has('aff')
+    ) {
       searchParams.delete('apiUrl')
       searchParams.delete('apiKey')
       searchParams.delete('codexCli')
       searchParams.delete('apiMode')
       searchParams.delete('provider')
+      searchParams.delete('aff')
 
       const nextSearch = searchParams.toString()
       const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`
@@ -88,7 +127,7 @@ export default function App() {
     }
 
     initStore()
-  }, [setSettings])
+  }, [setPendingAff, setSettings, setShowSettings])
 
   useEffect(() => {
     const preventPageImageDrag = (e: DragEvent) => {

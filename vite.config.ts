@@ -29,21 +29,34 @@ export default defineConfig(({ command }) => {
     },
     server: {
       host: true,
-      proxy:
-        devProxyConfig?.enabled
+      proxy: {
+        '/auth': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+        '/v1': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+        ...(devProxyConfig?.enabled
           ? {
               [devProxyConfig.prefix]: {
                 target: devProxyConfig.target,
                 changeOrigin: devProxyConfig.changeOrigin,
                 secure: devProxyConfig.secure,
-                rewrite: (path) =>
+                rewrite: (path: string) =>
                   path.replace(
                     new RegExp(`^${devProxyConfig.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
                     '',
                   ),
               },
             }
-          : undefined,
+          : {}),
+      },
     },
   }
 })

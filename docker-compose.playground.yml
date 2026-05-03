@@ -1,0 +1,24 @@
+services:
+  playground:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./server/data:/app/server/data
+    environment:
+      - PORT=3001
+      - NEW_API_URL=http://127.0.0.1:3000
+      - DB_PATH=/app/server/data/playground.db
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - BUILTIN_API_KEY=${BUILTIN_API_KEY:-}
+      - GLOBAL_DAILY_LIMIT=${GLOBAL_DAILY_LIMIT:-1000}
+      - PER_USER_DAILY_LIMIT=${PER_USER_DAILY_LIMIT:-10}
+      - PER_USER_UNVERIFIED_LIMIT=${PER_USER_UNVERIFIED_LIMIT:-3}
+      - AFF_BONUS=${AFF_BONUS:-10}
+      - SMTP_HOST=${SMTP_HOST:-smtpdm.aliyun.com}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_USER=${SMTP_USER:-admini@notify.moyuu.cc}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-admini@notify.moyuu.cc}

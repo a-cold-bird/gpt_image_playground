@@ -1,5 +1,11 @@
 node_modules
 dist
+server/data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
 .git
 .gitignore
 *.md

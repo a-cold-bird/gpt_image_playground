@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playground Admin</title>
+<style>
+:root{--bg:#0f1117;--bg2:#181a24;--bg3:#1e2030;--border:#2a2d3e;--text:#e0e0e8;--text2:#8b8fa3;--text3:#565a6e;--accent:#6366f1;--accent2:#818cf8;--green:#34d399;--red:#f87171;--yellow:#fbbf24;--card:#181a24}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,system-ui,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+.login{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-box{background:var(--bg2);padding:2rem;border-radius:16px;border:1px solid var(--border);width:340px}
+.login-box h2{margin-bottom:1.2rem;font-size:1.1rem;color:var(--text)}
+input,select{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.55rem .75rem;font-size:.85rem;outline:none;transition:border .2s}
+input:focus,select:focus{border-color:var(--accent)}
+.login-box input{width:100%;margin-bottom:.8rem}
+.btn{padding:.55rem 1rem;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:500;transition:background .2s}
+.btn:hover{background:var(--accent2)}
+.btn-sm{padding:.35rem .7rem;font-size:.75rem}
+.btn-danger{background:var(--red)}.btn-danger:hover{background:#ef4444}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text2)}.btn-ghost:hover{background:var(--bg3)}
+.login-box .btn{width:100%}
+.app{display:none}
+nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:.6rem 1.5rem;display:flex;gap:.5rem;align-items:center}
+nav a{text-decoration:none;color:var(--text2);font-size:.8rem;padding:.4rem .8rem;border-radius:6px;cursor:pointer;transition:all .15s}
+nav a.active,nav a:hover{background:var(--accent);color:#fff}
+nav .title{font-weight:600;font-size:.95rem;margin-right:auto;color:var(--text)}
+nav .logout{margin-left:auto;color:var(--text3);font-size:.75rem;cursor:pointer}
+nav .logout:hover{color:var(--text2)}
+.content{max-width:1200px;margin:1.2rem auto;padding:0 1.5rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;margin-bottom:1.2rem}
+.card{background:var(--card);padding:1rem;border-radius:12px;border:1px solid var(--border)}
+.card .num{font-size:1.5rem;font-weight:700;color:var(--accent2)}
+.card .num.green{color:var(--green)}.card .num.red{color:var(--red)}.card .num.yellow{color:var(--yellow)}
+.card .label{font-size:.7rem;color:var(--text3);margin-top:.2rem}
+.key-status{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1.2rem}
+.key-status h4{font-size:.85rem;color:var(--text2);margin-bottom:.6rem}
+.key-row{display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.8rem}
+.key-row span{color:var(--text3)}.key-row strong{color:var(--text)}
+table{width:100%;background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);border-collapse:collapse;font-size:.78rem}
+th{background:var(--bg3);text-align:left;padding:.55rem .6rem;font-weight:500;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:.5rem .6rem;border-bottom:1px solid var(--border);color:var(--text)}
+tr:hover td{background:var(--bg3)}
+.status-ok{color:var(--green);font-weight:500}.status-error{color:var(--red);font-weight:500}.status-pending{color:var(--yellow);font-weight:500}
+.error-msg{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--red);font-size:.7rem;cursor:help}
+.actions{display:flex;gap:.3rem}
+.section-title{font-size:.95rem;font-weight:600;margin-bottom:.8rem;color:var(--text)}
+.filter-bar{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
+.filter-bar input,.filter-bar select{font-size:.8rem;padding:.4rem .6rem}
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+.config-grid label{font-size:.75rem;color:var(--text2)}
+.config-grid input{width:100%;margin-top:.3rem}
+.pagination{display:flex;gap:.3rem;margin-top:.8rem;justify-content:center}
+.pagination button{padding:.3rem .7rem;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg3);font-size:.75rem;color:var(--text2)}
+.pagination button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pagination button:hover:not(.active){background:var(--border)}
+.toast{position:fixed;top:1rem;right:1rem;padding:.6rem 1rem;border-radius:8px;font-size:.8rem;z-index:999;animation:fadeIn .2s}
+.toast.ok{background:#065f4640;color:var(--green);border:1px solid #065f4660}
+.toast.error{background:#991b1b40;color:var(--red);border:1px solid #991b1b60}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.65rem;font-weight:600}
+.badge-ok{background:#34d39920;color:var(--green)}.badge-ban{background:#f8717120;color:var(--red)}
+.ip{font-size:.7rem;color:var(--text3);font-family:monospace}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:1.5rem;width:380px;max-width:90vw}
+.modal h3{font-size:.95rem;margin-bottom:1rem}
+.modal .field{margin-bottom:.8rem}
+.modal .field label{display:block;font-size:.75rem;color:var(--text2);margin-bottom:.3rem}
+.modal .field input{width:100%}
+.modal .btns{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem}
+</style>
+</head>
+<body>
+<div class="login" id="loginPage">
+  <div class="login-box">
+    <h2>Playground Admin</h2>
+    <input type="password" id="pwd" placeholder="管理员密码" autofocus onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" onclick="doLogin()">登录</button>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <nav>
+    <span class="title">Playground Admin</span>
+    <a onclick="showTab('dashboard')" id="tab-dashboard" class="active">仪表盘</a>
+    <a onclick="showTab('users')" id="tab-users">用户</a>
+    <a onclick="showTab('config')" id="tab-config">配置</a>
+    <a onclick="showTab('logs')" id="tab-logs">日志</a>
+    <span class="logout" onclick="logout()">退出</span>
+  </nav>
+  <div class="content">
+    <div id="page-dashboard">
+      <div class="key-status" id="keyStatus"></div>
+      <div class="cards" id="statsCards"></div>
+      <h3 class="section-title">今日 Top 用户</h3>
+      <table><thead><tr><th>ID</th><th>指纹</th><th>邮箱</th><th>IP</th><th>今日使用</th></tr></thead><tbody id="topUsers"></tbody></table>
+    </div>
+    <div id="page-users" style="display:none">
+      <div class="filter-bar">
+        <input id="userSearch" placeholder="搜索指纹 / 邮箱 / 邀请码 / IP" style="flex:1;min-width:200px">
+        <button class="btn btn-sm" onclick="loadUsers(1)">搜索</button>
+      </div>
+      <div id="batchBar" style="display:none;margin-bottom:.8rem" class="filter-bar">
+        <span style="font-size:.8rem;color:var(--text2)">已选 <strong id="batchCount">0</strong> 项</span>
+        <button class="btn btn-sm btn-danger" onclick="batchAction('ban')">批量封禁</button>
+        <button class="btn btn-sm btn-ghost" onclick="batchAction('unban')">批量解封</button>
+        <button class="btn btn-sm btn-danger" onclick="batchAction('delete')">批量删除</button>
+        <button class="btn btn-sm btn-ghost" onclick="clearSelection()">取消选择</button>
+      </div>
+      <table><thead><tr><th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)"></th><th>ID</th><th>指纹</th><th>邮箱</th><th>IP</th><th>日限额</th><th>奖励</th><th>邀请码</th><th>邀请人</th><th>已邀</th><th>状态</th><th>操作</th></tr></thead><tbody id="userList"></tbody></table>
+      <div class="pagination" id="userPagination"></div>
+    </div>
+    <div id="page-config" style="display:none">
+      <h3 class="section-title">系统配置</h3>
+      <div class="config-grid" id="configGrid"></div>
+      <button class="btn" style="margin-top:1rem" onclick="saveConfig()">保存配置</button>
+    </div>
+    <div id="page-logs" style="display:none">
+      <div class="filter-bar">
+        <input id="logDate" type="date" title="日期">
+        <input id="logUserId" placeholder="用户ID" style="width:80px">
+        <select id="logStatus"><option value="all">全部状态</option><option value="ok">成功</option><option value="error">失败</option><option value="pending">处理中</option></select>
+        <select id="logSort"><option value="id-DESC">最新优先</option><option value="id-ASC">最早优先</option><option value="status-ASC">状态排序</option></select>
+        <button class="btn btn-sm" onclick="loadLogs(1)">查询</button>
+      </div>
+      <table><thead><tr><th>ID</th><th>用户</th><th>邮箱</th><th>IP</th><th>日期</th><th>时间</th><th>状态</th><th>错误信息</th></tr></thead><tbody id="logList"></tbody></table>
+      <div class="pagination" id="logPagination"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal container -->
+<div id="modalRoot"></div>
+
+<script>
+let token = localStorage.getItem('admin_token') || ''
+const API = '/api/admin'
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { ...opts, headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', ...opts.headers } })
+  const data = await res.json()
+  if (!data.success) throw new Error(data.message)
+  return data.data
+}
+
+// Toast
+function toast(text, isError) {
+  const el = document.createElement('div')
+  el.className = 'toast ' + (isError ? 'error' : 'ok')
+  el.textContent = text
+  document.body.appendChild(el)
+  setTimeout(() => el.remove(), 3000)
+}
+
+// Custom modal system
+function showModal(title, fields, onConfirm, opts = {}) {
+  const root = document.getElementById('modalRoot')
+  const overlay = document.createElement('div')
+  overlay.className = 'modal-overlay'
+  const modal = document.createElement('div')
+  modal.className = 'modal'
+  let html = `<h3>${esc(title)}</h3>`
+  for (const f of fields) {
+    html += `<div class="field"><label>${esc(f.label)}</label><input id="modal-${f.id}" type="${f.type||'text'}" value="${esc(String(f.value??''))}" placeholder="${esc(f.placeholder||'')}"></div>`
+  }
+  if (opts.message) html += `<p style="font-size:.8rem;color:var(--text2);margin-bottom:.5rem">${esc(opts.message)}</p>`
+  html += `<div class="btns"><button class="btn btn-ghost btn-sm" id="modal-cancel">取消</button><button class="btn btn-sm ${opts.danger?'btn-danger':''}" id="modal-ok">${opts.confirmText||'确定'}</button></div>`
+  modal.innerHTML = html
+  overlay.appendChild(modal)
+  root.appendChild(overlay)
+  const firstInput = modal.querySelector('input')
+  if (firstInput) firstInput.focus()
+  modal.querySelector('#modal-cancel').onclick = () => overlay.remove()
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove() })
+  modal.querySelector('#modal-ok').onclick = () => {
+    const values = {}
+    for (const f of fields) values[f.id] = document.getElementById('modal-' + f.id).value
+    onConfirm(values)
+    overlay.remove()
+  }
+  modal.querySelectorAll('input').forEach(inp => { inp.onkeydown = e => { if (e.key === 'Enter') modal.querySelector('#modal-ok').click() } })
+}
+
+function showConfirm(title, message, onConfirm, opts = {}) {
+  const root = document.getElementById('modalRoot')
+  const overlay = document.createElement('div')
+  overlay.className = 'modal-overlay'
+  const modal = document.createElement('div')
+  modal.className = 'modal'
+  modal.innerHTML = `<h3>${esc(title)}</h3><p style="font-size:.85rem;color:var(--text2);margin-bottom:1rem">${esc(message)}</p><div class="btns"><button class="btn btn-ghost btn-sm" id="modal-cancel">取消</button><button class="btn btn-sm ${opts.danger?'btn-danger':''}" id="modal-ok">${opts.confirmText||'确定'}</button></div>`
+  overlay.appendChild(modal)
+  root.appendChild(overlay)
+  modal.querySelector('#modal-cancel').onclick = () => overlay.remove()
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove() })
+  modal.querySelector('#modal-ok').onclick = () => { onConfirm(); overlay.remove() }
+}
+
+async function doLogin() {
+  token = document.getElementById('pwd').value
+  localStorage.setItem('admin_token', token)
+  try {
+    await api('/dashboard')
+    document.getElementById('loginPage').style.display = 'none'
+    document.getElementById('app').style.display = 'block'
+    loadDashboard()
+  } catch(e) { toast('密码错误', true); token = ''; localStorage.removeItem('admin_token') }
+}
+
+function logout() { token = ''; localStorage.removeItem('admin_token'); location.reload() }
+
+function showTab(name) {
+  document.querySelectorAll('[id^="page-"]').forEach(el => el.style.display = 'none')
+  document.querySelectorAll('nav a').forEach(el => el.classList.remove('active'))
+  document.getElementById('page-' + name).style.display = 'block'
+  document.getElementById('tab-' + name)?.classList.add('active')
+  if (name === 'dashboard') loadDashboard()
+  if (name === 'users') loadUsers(1)
+  if (name === 'config') loadConfig()
+  if (name === 'logs') loadLogs(1)
+}
+
+async function loadDashboard() {
+  const [d, kq] = await Promise.all([api('/dashboard'), api('/key-quota')])
+  let keyHtml = '<h4>内置 API Key 状态</h4><div class="key-row">'
+  if (!kq.configured) {
+    keyHtml += '<span style="color:var(--red)">未配置 — 请在「配置」中设置 builtin_api_key</span>'
+  } else if (kq.error) {
+    keyHtml += `<span style="color:var(--red)">错误: ${esc(kq.error)}</span>`
+  } else {
+    const pct = kq.total_granted > 0 ? ((kq.total_available / kq.total_granted) * 100).toFixed(1) : '0'
+    keyHtml += `<span>名称: <strong>${esc(kq.name||'-')}</strong></span>`
+    keyHtml += `<span>总额度: <strong>${fmt(kq.total_granted)}</strong></span>`
+    keyHtml += `<span>已用: <strong>${fmt(kq.total_used)}</strong></span>`
+    keyHtml += `<span>剩余: <strong style="color:${kq.total_available>0?'var(--green)':'var(--red)'}">${fmt(kq.total_available)}</strong> (${pct}%)</span>`
+    if (kq.unlimited_quota) keyHtml += `<span><strong style="color:var(--green)">无限额度</strong></span>`
+  }
+  keyHtml += '</div>'
+  document.getElementById('keyStatus').innerHTML = keyHtml
+
+  document.getElementById('statsCards').innerHTML = [
+    { num: d.today, label: '今日生成' },
+    { num: d.globalRemaining + '/' + d.globalLimit, label: '剩余/限额', cls: d.globalRemaining > 0 ? 'green' : 'red' },
+    { num: d.todayErrors || 0, label: '今日错误', cls: (d.todayErrors||0) > 0 ? 'red' : '' },
+    { num: d.yesterday, label: '昨日生成' },
+    { num: d.total, label: '累计生成' },
+    { num: d.totalUsers, label: '总用户' },
+    { num: d.todayActiveUsers, label: '今日活跃', cls: 'yellow' },
+  ].map(c => `<div class="card"><div class="num ${c.cls||''}">${c.num}</div><div class="label">${c.label}</div></div>`).join('')
+
+  document.getElementById('topUsers').innerHTML = d.topUsers.map(u =>
+    `<tr><td>${u.id}</td><td title="${esc(u.fingerprint)}">${(u.fingerprint||'').slice(0,10)}...</td><td>${u.email||dim('-')}</td><td class="ip">${u.ip||dim('-')}</td><td>${u.usage_count}</td></tr>`
+  ).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--text3)">暂无数据</td></tr>`
+}
+
+function fmt(n) { if (n == null) return '-'; return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n) }
+function dim(s) { return `<span style="color:var(--text3)">${s}</span>` }
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+
+let usersPage = 1
+const selectedUsers = new Set()
+
+function updateBatchBar() {
+  const bar = document.getElementById('batchBar')
+  const cnt = document.getElementById('batchCount')
+  if (selectedUsers.size > 0) { bar.style.display = 'flex'; cnt.textContent = String(selectedUsers.size) }
+  else { bar.style.display = 'none' }
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.user-cb').forEach(cb => { cb.checked = checked; const id = parseInt(cb.dataset.id); if (checked) selectedUsers.add(id); else selectedUsers.delete(id) })
+  updateBatchBar()
+}
+
+function toggleUserSelect(id, checked) {
+  if (checked) selectedUsers.add(id); else selectedUsers.delete(id)
+  updateBatchBar()
+}
+
+function clearSelection() {
+  selectedUsers.clear()
+  document.querySelectorAll('.user-cb').forEach(cb => cb.checked = false)
+  document.getElementById('selectAll').checked = false
+  updateBatchBar()
+}
+
+async function batchAction(action) {
+  const ids = Array.from(selectedUsers)
+  const labels = { ban: '封禁', unban: '解封', delete: '删除' }
+  showConfirm(`批量${labels[action]}`, `确认${labels[action]} ${ids.length} 个用户？${action==='delete'?'此操作不可恢复。':''}`, async () => {
+    try {
+      await api('/users/batch', { method: 'POST', body: JSON.stringify({ ids, action }) })
+      toast(`已${labels[action]} ${ids.length} 个用户`)
+      clearSelection()
+      loadUsers(usersPage)
+    } catch(e) { toast(e.message, true) }
+  }, { danger: action !== 'unban', confirmText: labels[action] })
+}
+
+async function loadUsers(page) {
+  usersPage = page
+  selectedUsers.clear()
+  updateBatchBar()
+  document.getElementById('selectAll').checked = false
+  const search = document.getElementById('userSearch').value
+  const d = await api('/users?page=' + page + '&pageSize=20' + (search ? '&search=' + encodeURIComponent(search) : ''))
+  document.getElementById('userList').innerHTML = d.users.map(u =>
+    `<tr>
+      <td><input type="checkbox" class="user-cb" data-id="${u.id}" onchange="toggleUserSelect(${u.id},this.checked)"></td>
+      <td>${u.id}</td>
+      <td title="${esc(u.fingerprint)}">${(u.fingerprint||'').slice(0,10)}...</td>
+      <td>${u.email||dim('-')}</td>
+      <td class="ip">${u.ip||dim('-')}</td>
+      <td>${u.daily_limit}</td>
+      <td>${u.bonus_quota}</td>
+      <td><code style="font-size:.65rem">${esc(u.aff_code)}</code></td>
+      <td>${u.invited_by ? `<span title="邀请人: ${esc(u.inviter_email||u.inviter_fingerprint?.slice(0,8)||'')}">ID#${u.invited_by}</span>` : dim('-')}</td>
+      <td>${u.invite_count > 0 ? `<span style="color:var(--green)">${u.invite_count}人</span>` : dim('0')}</td>
+      <td>${u.banned?'<span class="badge badge-ban">封禁</span>':'<span class="badge badge-ok">正常</span>'}</td>
+      <td class="actions">
+        <button class="btn btn-sm btn-ghost" onclick="editUser(${u.id},${u.daily_limit},${u.bonus_quota})">编辑</button>
+        <button class="btn btn-sm ${u.banned?'btn-ghost':'btn-danger'}" onclick="toggleBan(${u.id},${u.banned?0:1})">${u.banned?'解封':'封禁'}</button>
+      </td>
+    </tr>`
+  ).join('') || `<tr><td colspan="12" style="text-align:center;color:var(--text3)">无用户</td></tr>`
+  renderPagination('userPagination', d.total, 20, page, 'loadUsers')
+}
+
+function editUser(id, limit, bonus) {
+  showModal('编辑用户 #' + id, [
+    { id: 'daily_limit', label: '每日限额', type: 'number', value: limit },
+    { id: 'bonus_quota', label: '奖励额度（一次性）', type: 'number', value: bonus },
+  ], async (vals) => {
+    try {
+      await api('/users/' + id, { method: 'PUT', body: JSON.stringify({ daily_limit: parseInt(vals.daily_limit), bonus_quota: parseInt(vals.bonus_quota) }) })
+      toast('已更新')
+      loadUsers(usersPage)
+    } catch(e) { toast(e.message, true) }
+  })
+}
+
+function toggleBan(id, banned) {
+  showConfirm(banned ? '封禁用户' : '解封用户', banned ? '确认封禁该用户？封禁后无法使用免费额度。' : '确认解封该用户？', async () => {
+    try {
+      await api('/users/' + id, { method: 'PUT', body: JSON.stringify({ banned }) })
+      toast(banned ? '已封禁' : '已解封')
+      loadUsers(usersPage)
+    } catch(e) { toast(e.message, true) }
+  }, { danger: banned, confirmText: banned ? '封禁' : '解封' })
+}
+
+async function loadConfig() {
+  const d = await api('/config')
+  const labels = { global_daily_limit: '全站每日总限额', per_user_daily_limit: '已验证用户每日限额', per_user_unverified_limit: '未验证用户每日限额', aff_bonus: '邀请奖励次数（一次性）', per_ip_daily_limit: '同 IP 每日总限额', per_ip_new_user_limit: '同 IP 24h 新用户上限', turnstile_site_key: 'Turnstile Site Key（留空禁用）', turnstile_secret: 'Turnstile Secret Key', builtin_api_key: '内置 API Key' }
+  document.getElementById('configGrid').innerHTML = Object.entries(d).map(([k, v]) => {
+    if (k === 'builtin_api_key' || k === 'turnstile_secret') {
+      return `<div>
+        <label>${labels[k]||k}</label>
+        <div style="display:flex;gap:.5rem;margin-top:.3rem;align-items:center">
+          <code style="font-size:.75rem;color:var(--text2);background:var(--bg);padding:.4rem .6rem;border-radius:6px;flex:1">${v || '<span style=color:var(--red)>未配置</span>'}</code>
+          <button class="btn btn-sm" onclick="changeSecret('${k}','${labels[k]||k}')">修改</button>
+        </div>
+      </div>`
+    }
+    return `<div><label>${labels[k]||k}</label><input id="cfg-${k}" value="${esc(v)}"></div>`
+  }).join('')
+}
+
+function changeSecret(key, label) {
+  showModal('修改 ' + label, [
+    { id: 'val', label: '输入新的值', type: 'text', placeholder: key === 'builtin_api_key' ? 'sk-...' : '' }
+  ], async (vals) => {
+    if (key === 'builtin_api_key' && vals.val && !vals.val.startsWith('sk-')) { toast('Key 需以 sk- 开头', true); return }
+    try {
+      await api('/config', { method: 'PUT', body: JSON.stringify({ [key]: vals.val }) })
+      toast('已更新')
+      loadConfig()
+    } catch(e) { toast(e.message, true) }
+  }, { confirmText: '保存' })
+}
+
+async function saveConfig() {
+  const inputs = document.querySelectorAll('[id^="cfg-"]')
+  const body = {}
+  inputs.forEach(el => { body[el.id.replace('cfg-', '')] = el.value })
+  try {
+    await api('/config', { method: 'PUT', body: JSON.stringify(body) })
+    toast('配置已保存')
+  } catch(e) { toast(e.message, true) }
+}
+
+async function loadLogs(page) {
+  const date = document.getElementById('logDate').value
+  const userId = document.getElementById('logUserId').value
+  const status = document.getElementById('logStatus').value
+  const [sortBy, sortDir] = (document.getElementById('logSort').value || 'id-DESC').split('-')
+  let qs = '?page=' + page + '&pageSize=50'
+  if (date) qs += '&date=' + date
+  if (userId) qs += '&userId=' + userId
+  if (status && status !== 'all') qs += '&status=' + status
+  qs += '&sortBy=' + sortBy + '&sortDir=' + sortDir
+
+  const d = await api('/logs' + qs)
+  document.getElementById('logList').innerHTML = d.logs.map(l => {
+    const sc = l.status === 'ok' ? 'status-ok' : l.status === 'error' ? 'status-error' : 'status-pending'
+    const sl = l.status === 'ok' ? '成功' : l.status === 'error' ? '失败' : '处理中'
+    return `<tr>
+      <td>${l.id}</td>
+      <td title="${esc(l.fingerprint)}">${(l.fingerprint||'').slice(0,10)}...</td>
+      <td>${l.email||dim('-')}</td>
+      <td class="ip">${l.ip||l.user_ip||dim('-')}</td>
+      <td>${l.date}</td>
+      <td style="font-size:.7rem">${l.created_at}</td>
+      <td><span class="${sc}">${sl}</span></td>
+      <td>${l.error_msg ? `<span class="error-msg" title="${esc(l.error_msg)}">${esc(l.error_msg)}</span>` : dim('-')}</td>
+    </tr>`
+  }).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--text3)">无日志</td></tr>`
+  renderPagination('logPagination', d.total, 50, page, 'loadLogs')
+}
+
+function renderPagination(id, total, size, cur, fn) {
+  const pages = Math.ceil(total / size)
+  if (pages <= 1) { document.getElementById(id).innerHTML = ''; return }
+  let h = ''
+  const show = Math.min(pages, 10)
+  let start = Math.max(1, cur - 4)
+  if (start + show - 1 > pages) start = Math.max(1, pages - show + 1)
+  for (let i = start; i < start + show; i++) h += `<button class="${i===cur?'active':''}" onclick="${fn}(${i})">${i}</button>`
+  if (pages > show) h += `<span style="color:var(--text3);font-size:.7rem;padding:0 .3rem">共${pages}页/${total}条</span>`
+  document.getElementById(id).innerHTML = h
+}
+
+// Auto-login
+if (token) {
+  api('/dashboard').then(() => {
+    document.getElementById('loginPage').style.display = 'none'
+    document.getElementById('app').style.display = 'block'
+    loadDashboard()
+  }).catch(() => { token = ''; localStorage.removeItem('admin_token') })
+}
+</script>
+</body>
+</html>

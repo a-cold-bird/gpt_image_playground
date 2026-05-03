@@ -16,6 +16,7 @@ import {
 } from '../lib/apiProfiles'
 import type { ApiProfile, AppSettings } from '../types'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
+import { bindEmail, checkQuota, sendVerificationCode, useAffCode } from '../lib/quota'
 import Select from './Select'
 
 function newId(prefix: string) {
@@ -32,16 +33,33 @@ export default function SettingsModal() {
   const settings = useStore((s) => s.settings)
   const setSettings = useStore((s) => s.setSettings)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
+  const quota = useStore((s) => s.quota)
+  const fingerprint = useStore((s) => s.fingerprint)
+  const setQuota = useStore((s) => s.setQuota)
+  const pendingAff = useStore((s) => s.pendingAff)
+  const setPendingAff = useStore((s) => s.setPendingAff)
   const importInputRef = useRef<HTMLInputElement>(null)
   
   const [draft, setDraft] = useState<AppSettings>(normalizeSettings(settings))
   const [timeoutInput, setTimeoutInput] = useState(String(getActiveApiProfile(settings).timeout))
   const [showApiKey, setShowApiKey] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [emailUser, setEmailUser] = useState('')
+  const [emailSuffix, setEmailSuffix] = useState('@qq.com')
+  const [codeInput, setCodeInput] = useState('')
+  const [affInput, setAffInput] = useState('')
+  const [quotaMessage, setQuotaMessage] = useState('')
+  const [quotaError, setQuotaError] = useState(false)
+  const [sendingCode, setSendingCode] = useState(false)
+  const [bindingEmail, setBindingEmail] = useState(false)
+  const [applyingAff, setApplyingAff] = useState(false)
+  const [codeCooldown, setCodeCooldown] = useState(0)
   
   const apiProxyAvailable = isApiProxyAvailable(readClientDevProxyConfig())
   const activeProfile = draft.profiles.find((profile) => profile.id === draft.activeProfileId) ?? draft.profiles[0] ?? getActiveApiProfile(draft)
   const apiProxyEnabled = apiProxyAvailable && activeProfile.provider === 'openai' && activeProfile.apiProxy
+  const isFreeMode = activeProfile.provider === 'openai' && !activeProfile.apiKey
+  const composedEmail = emailUser.trim() ? emailUser.trim() + emailSuffix : ''
 
   const getDefaultModelForMode = (apiMode: AppSettings['apiMode']) =>
     apiMode === 'responses' ? DEFAULT_RESPONSES_MODEL : DEFAULT_IMAGES_MODEL
@@ -67,6 +85,18 @@ export default function SettingsModal() {
   useEffect(() => {
     setTimeoutInput(String(activeProfile.timeout))
   }, [activeProfile.id, activeProfile.timeout])
+
+  useEffect(() => {
+    if (!showSettings || !pendingAff) return
+    setAffInput(pendingAff)
+    setPendingAff('')
+  }, [pendingAff, setPendingAff, showSettings])
+
+  useEffect(() => {
+    if (codeCooldown <= 0) return
+    const timer = window.setTimeout(() => setCodeCooldown((value) => value - 1), 1000)
+    return () => window.clearTimeout(timer)
+  }, [codeCooldown])
 
   const commitSettings = (nextDraft: AppSettings) => {
     const normalizedProfiles = nextDraft.profiles.map((profile) => {
@@ -193,6 +223,59 @@ export default function SettingsModal() {
     commitSettings(nextDraft)
   }
 
+  const handleSendCode = async () => {
+    if (!composedEmail) return
+    setSendingCode(true)
+    setQuotaMessage('')
+    try {
+      await sendVerificationCode(composedEmail)
+      setQuotaMessage('验证码已发送，请检查邮箱')
+      setQuotaError(false)
+      setCodeCooldown(60)
+    } catch (err) {
+      setQuotaMessage(err instanceof Error ? err.message : '发送失败')
+      setQuotaError(true)
+    } finally {
+      setSendingCode(false)
+    }
+  }
+
+  const handleBindEmail = async () => {
+    if (!composedEmail || !codeInput.trim() || !fingerprint) return
+    setBindingEmail(true)
+    setQuotaMessage('')
+    try {
+      await bindEmail(fingerprint, composedEmail, codeInput.trim(), affInput.trim() || undefined)
+      const nextQuota = await checkQuota(fingerprint)
+      setQuota({ ...(quota || { affCode: '', banned: false }), ...nextQuota, hasEmail: true, email: composedEmail })
+      setQuotaMessage('绑定成功，额度已刷新')
+      setQuotaError(false)
+    } catch (err) {
+      setQuotaMessage(err instanceof Error ? err.message : '绑定失败')
+      setQuotaError(true)
+    } finally {
+      setBindingEmail(false)
+    }
+  }
+
+  const handleUseAffCode = async () => {
+    if (!affInput.trim() || !fingerprint) return
+    setApplyingAff(true)
+    setQuotaMessage('')
+    try {
+      await useAffCode(fingerprint, affInput.trim())
+      const nextQuota = await checkQuota(fingerprint)
+      setQuota({ ...(quota || { hasEmail: false, email: null, affCode: '', banned: false }), ...nextQuota })
+      setQuotaMessage('邀请码已使用，额度已刷新')
+      setQuotaError(false)
+    } catch (err) {
+      setQuotaMessage(err instanceof Error ? err.message : '使用邀请码失败')
+      setQuotaError(true)
+    } finally {
+      setApplyingAff(false)
+    }
+  }
+
   return (
     <div data-no-drag-select className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div
@@ -255,6 +338,119 @@ export default function SettingsModal() {
               </div>
             </div>
           </section>
+
+          {isFreeMode && quota && (
+            <section>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 10v2" />
+                  </svg>
+                  免费额度
+                </h4>
+              </div>
+              <div className="space-y-3 rounded-2xl border border-gray-200/70 bg-gray-50/70 p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-white/80 p-3 text-center dark:bg-white/[0.04]">
+                    <div className={`text-lg font-semibold ${quota.userRemaining > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                      {quota.userRemaining}
+                    </div>
+                    <div className="text-[10px] text-gray-500">今日剩余 / {quota.userLimit}</div>
+                  </div>
+                  <div className="rounded-xl bg-white/80 p-3 text-center dark:bg-white/[0.04]">
+                    <div className="text-lg font-semibold text-gray-700 dark:text-gray-200">{quota.globalRemaining}</div>
+                    <div className="text-[10px] text-gray-500">全站剩余 / {quota.globalLimit}</div>
+                  </div>
+                </div>
+
+                {quota.hasEmail && quota.email ? (
+                  <div className="rounded-xl bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-500/10 dark:text-green-300">
+                    已绑定邮箱：<span className="font-medium">{quota.email}</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        value={emailUser}
+                        onChange={(e) => setEmailUser(e.target.value.replace(/[@\s]/g, ''))}
+                        placeholder="邮箱用户名"
+                        className="min-w-0 flex-1 rounded-xl border border-gray-200/70 bg-white/80 px-3 py-2 text-xs outline-none focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200"
+                      />
+                      <select
+                        value={emailSuffix}
+                        onChange={(e) => setEmailSuffix(e.target.value)}
+                        className="rounded-xl border border-gray-200/70 bg-white/80 px-2 py-2 text-xs outline-none dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-200"
+                      >
+                        <option value="@qq.com">@qq.com</option>
+                        <option value="@163.com">@163.com</option>
+                        <option value="@126.com">@126.com</option>
+                        <option value="@gmail.com">@gmail.com</option>
+                        <option value="@foxmail.com">@foxmail.com</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        value={codeInput}
+                        onChange={(e) => setCodeInput(e.target.value)}
+                        placeholder="验证码"
+                        className="min-w-0 flex-1 rounded-xl border border-gray-200/70 bg-white/80 px-3 py-2 text-xs outline-none focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200"
+                      />
+                      <button
+                        onClick={handleSendCode}
+                        disabled={sendingCode || codeCooldown > 0 || !emailUser.trim()}
+                        className="rounded-xl bg-blue-500 px-3 py-2 text-xs font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {codeCooldown > 0 ? `${codeCooldown}s` : sendingCode ? '发送中' : '发送'}
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleBindEmail}
+                      disabled={bindingEmail || !composedEmail || !codeInput.trim()}
+                      className="w-full rounded-xl bg-green-500 px-3 py-2 text-xs font-medium text-white hover:bg-green-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {bindingEmail ? '绑定中' : '绑定邮箱'}
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    value={affInput}
+                    onChange={(e) => setAffInput(e.target.value)}
+                    placeholder="邀请码"
+                    className="min-w-0 flex-1 rounded-xl border border-gray-200/70 bg-white/80 px-3 py-2 text-xs outline-none focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200"
+                  />
+                  <button
+                    onClick={handleUseAffCode}
+                    disabled={applyingAff || !affInput.trim()}
+                    className="rounded-xl bg-purple-500 px-3 py-2 text-xs font-medium text-white hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {applyingAff ? '使用中' : '使用'}
+                  </button>
+                </div>
+                {quota.affCode && (
+                  <div className="flex items-center gap-2 rounded-xl bg-purple-50 px-3 py-2 text-xs dark:bg-purple-500/10">
+                    <span className="text-gray-500 dark:text-gray-400">我的邀请码</span>
+                    <code className="min-w-0 flex-1 truncate font-mono text-purple-600 dark:text-purple-300">{quota.affCode}</code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}?aff=${quota.affCode}`)
+                        useStore.getState().showToast('邀请链接已复制', 'success')
+                      }}
+                      className="text-purple-600 hover:text-purple-700 dark:text-purple-300"
+                    >
+                      复制链接
+                    </button>
+                  </div>
+                )}
+                {quotaMessage && (
+                  <p className={`text-xs ${quotaError ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
+                    {quotaMessage}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
 
           <section>
             <div className="mb-4 flex items-center justify-between gap-3 relative">
